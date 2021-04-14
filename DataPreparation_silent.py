@@ -28,6 +28,9 @@ Resampling_Silent = False
 Perform_Artifacts_Rejection = False
 
 if Create_Epochs_Silent:
+
+    "-------------> Create Epoch from Silent data <-------------------"
+
     raw = mne.io.read_raw_fif(raw_file)
     raw.load_data()
     milliseconds_in_each_epoch = 500
@@ -62,6 +65,8 @@ if Create_Epochs_Silent:
 
 if Resampling_Silent:
 
+    "-----------> Resampling Silent Epoched data <-----------------"
+
     print(f" Old Frequency : {Silent_epochs.info['sfreq']}")
     print(Silent_epochs.times)
     sampling_rate = 100
@@ -71,6 +76,9 @@ if Resampling_Silent:
     Silent_epochs.save(raw_file[:-4] + f'_resampled_{sampling_rate}hz.fif')
 
 if Perform_Artifacts_Rejection:
+
+    "------------------->  Artifacts Rejection <----------------------------"
+
     Silent_epochs = mne.read_epochs(Silent_epochs_file)
     epoch_ids_beforeAR = Silent_epochs.selection
     print(len(epoch_ids_beforeAR))

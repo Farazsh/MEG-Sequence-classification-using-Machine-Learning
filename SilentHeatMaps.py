@@ -11,7 +11,7 @@ from os.path import join
 plt.switch_backend("TkAgg")
 mne.set_log_level('WARNING')
 
-result_file = r'C:\Users\FARAZ\Desktop\MEG Plots\Multinomial l2\Silent\20210319_SilentDataLabelsEstimates_AR1'  # (180, 50, 194, 4)
+result_file = r'C:\Users\FARAZ\Documents\Git Repositories\MEG_SoundSequences\Silent Results'  # (180, 50, 194, 4)
 epochs = np.load(result_file + ".npy", allow_pickle=True)
 Models = [68, 81, 92]
 

@@ -15,6 +15,8 @@ from scipy.stats import sem
 
 def plot_smooth_curve(df, y1, y2, y3):
 
+    "------------------> Plots the smooth accuracy curves from numpy arrays <------------"
+
     x = np.arange(-500, 1300, 10)
 
     # Generate spline basis with different degrees of freedom
@@ -145,6 +147,9 @@ def plot_base_curve(y1, y2, y3):
 
 
 def annot_max(xmax, ymax, ax=None):
+
+    "-----------> Puts the annotation on the accuracy curves, with the max value  <----------"
+
     text= "Time: {}ms, acc={:.4f}".format(xmax, ymax)
     if not ax:
         ax=plt.gca()
@@ -177,7 +182,7 @@ def annot_max3(xmax, ymax, ax=None):
     ax.annotate(text, xy=(xmax, ymax), xytext=(0.05, 0.75), **kw)
 
 
-results_dir = r"C:\Users\FARAZ\Desktop\MEG Plots\Multinomial l2\Results"
+results_dir = r"C:\Users\FARAZ\Documents\Git Repositories\MEG_SoundSequences\Results"
 results_name = r"MEGAnalysisResult"
 result_file = join(results_dir, results_name)
 #

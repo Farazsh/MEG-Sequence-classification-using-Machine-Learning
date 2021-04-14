@@ -1,9 +1,6 @@
 # imports
 import mne
 import numpy as np
-import random
-import matplotlib
-import matplotlib.pyplot as plt
 import mne.viz
 import warnings
 warnings.filterwarnings('ignore')
@@ -26,7 +23,6 @@ if 'resampled' not in raw_file:
     print('Data is resampled!')
     raw_file = raw_file[:-4] + '_resampled.fif'
     epochs.save(raw_file)
-
 
 Perform_Artifacts_Rejection = False
 
