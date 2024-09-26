@@ -84,7 +84,7 @@ class MEGAnalysis:
 
 
 def main():
-    data_dir = r"\ML on MEG\SensoryProcessing_MEG-faraz\MEG_Data\S17"
+    data_dir = r"ML on MEG\SensoryProcessing_MEG-faraz\MEG_Data\S17"
     filename = r"17_2_tsss_mc_trans_mag_nobase-epochs_afterICA-faraz_resampled_AR1.fif"
 
     meg_analysis = MEGAnalysis(data_dir, filename)

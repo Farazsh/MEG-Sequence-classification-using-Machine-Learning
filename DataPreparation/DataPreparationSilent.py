@@ -1,99 +1,123 @@
-# imports
-import mne
+import os
+from os.path import join
 import numpy as np
-import random
-import matplotlib
 import matplotlib.pyplot as plt
-import mne.viz
+import mne
 import warnings
 warnings.filterwarnings('ignore')
-from os.path import join
 plt.switch_backend("TkAgg")
 mne.set_log_level('WARNING')
 
 
-data_dir = r"C:\Users\FARAZ\Documents\Git Repositories\ML on MEG\check\SensoryProcessing_MEG-faraz\MEG_Data"
-fname_raw = r"17_2_tsss_mc_trans_silent.fif"
-fname_epoched = r"17_2_tsss_mc_trans_silent_resampled_100hz_500ms_beforeAR.fif"
-fname_epoched_AR = r"17_2_tsss_mc_trans_silent_resampled_100hz_500ms_afterAR.fif"
-raw_file = join(data_dir, fname_raw)
+def create_silent_epochs(raw_file):
+    """Create epochs from silent MEG data.
 
-Silent_epochs_file = join(data_dir, fname_epoched)
-Silent_epochs_AR_file = join(data_dir, fname_epoched_AR)
+    Parameters:
+    - raw_file: str, path to the raw FIF file.
+    """
+    raw = mne.io.read_raw_fif(raw_file, preload=True)
 
-Silent_epochs = mne.read_epochs(Silent_epochs_file)
+    # Define epoch duration in seconds
+    epoch_duration_sec = 0.5  # 500 milliseconds
 
-Create_Epochs_Silent = False
-Resampling_Silent = False
-Perform_Artifacts_Rejection = False
+    # Create fixed-length events
+    events = mne.make_fixed_length_events(raw, duration=epoch_duration_sec)
 
-if Create_Epochs_Silent:
+    # Create epochs from the raw data
+    epochs = mne.Epochs(raw, events=events, tmin=0, tmax=epoch_duration_sec, preload=True)
 
-    "-------------> Create Epoch from Silent data <-------------------"
+    # Save the epochs to a FIF file
+    base_filename = os.path.splitext(raw_file)[0]
+    epochs.save(f"{base_filename}_epoched.fif", overwrite=True)
 
-    raw = mne.io.read_raw_fif(raw_file)
-    raw.load_data()
-    milliseconds_in_each_epoch = 500
 
-    events = np.arange(milliseconds_in_each_epoch, 97474, milliseconds_in_each_epoch)
-    previous_mark = 0
-    epoch_data = []
-    raw_data = raw.get_data().T
-    for e in events:
-        epoch_data.append(raw_data[previous_mark:e].T)
-        previous_mark = e
-    epoc_data = np.array(epoch_data)
+def resample_silent_epochs(epochs_file, sampling_rate):
+    """Resample the silent epochs to a new sampling rate.
 
-    "###########################################"
-    # Useful in case of previous mne versions
-    def namw2type(name):
-        ch_list = ['eeg', 'meg', 'grad', 'ref_meg', 'chpi', 'sti', 'eog', 'ecg', 'emg', 'seeg', 'bio', 'ecog', 'hbo',
-                   'hbr']
-        map_dict = {'sti': 'stim', 'meg': 'mag', 'chpi': 'misc'}
-        for ch_type in ch_list:
-            if ch_type in name.lower():
-                return map_dict.get(ch_type, ch_type)
-        print(name)
-        return 'misc'
-    for _meg in raw.ch_names:
-        ch_types = [namw2type(_meg) for _meg in raw.ch_names]
-    "###########################################"
+    Parameters:
+    - epochs_file: str, path to the epochs FIF file.
+    - sampling_rate: int or float, desired sampling rate in Hz.
+    """
+    epochs = mne.read_epochs(epochs_file, preload=True)
+    print(f"Old Sampling Frequency: {epochs.info['sfreq']} Hz")
 
-    info1 = mne.create_info(ch_names=raw.ch_names, ch_types=raw.get_channel_types(), sfreq=raw.info['sfreq'])
-    Silent_epochs = mne.EpochsArray(epoc_data, info1)
-    Silent_epochs.save(raw_file[:-4] + '_Epoched.fif')
+    # Resample the epochs
+    epochs_resampled = epochs.copy().resample(sampling_rate, npad='auto')
+    print(f"New Sampling Frequency: {epochs_resampled.info['sfreq']} Hz")
 
-if Resampling_Silent:
+    # Save the resampled epochs
+    base_filename = os.path.splitext(epochs_file)[0]
+    epochs_resampled.save(f"{base_filename}_resampled_{int(sampling_rate)}hz.fif", overwrite=True)
 
-    "-----------> Resampling Silent Epoched data <-----------------"
 
-    print(f" Old Frequency : {Silent_epochs.info['sfreq']}")
-    print(Silent_epochs.times)
-    sampling_rate = 100
-    Silent_epochs = Silent_epochs.resample(sampling_rate, npad='auto')
-    print(f"New Frequency = {Silent_epochs.info['sfreq']}")
-    print(Silent_epochs.times)
-    Silent_epochs.save(raw_file[:-4] + f'_resampled_{sampling_rate}hz.fif')
+def artifacts_rejection(epochs_file):
+    """Perform artifact rejection on the epochs.
 
-if Perform_Artifacts_Rejection:
+    Parameters:
+    - epochs_file: str, path to the epochs FIF file.
+    """
+    # Load epochs
+    epochs = mne.read_epochs(epochs_file, preload=True)
+    epoch_ids_before_ar = epochs.selection.copy()
+    print(f"Number of epochs before artifact rejection: {len(epoch_ids_before_ar)}")
 
-    "------------------->  Artifacts Rejection <----------------------------"
+    # Plot the averaged data before artifact rejection
+    epochs.pick_types(meg='mag').average().plot(
+        scalings=dict(mag=1e15), ylim=dict(mag=[-300, 300]),
+        title='Average Before Artifact Rejection')
 
-    Silent_epochs = mne.read_epochs(Silent_epochs_file)
-    epoch_ids_beforeAR = Silent_epochs.selection
-    print(len(epoch_ids_beforeAR))
-    Silent_epochs.pick_types(meg='mag').average().plot(scalings=dict(mag=1e15), ylim=dict(mag=[-300, 300]))
-    epoch_ids_afterAR = Silent_epochs.selection
-    print(epoch_ids_afterAR)
-    rejectedEpoch_ids = [epoch_ids_beforeAR[i] for i in range(len(epoch_ids_beforeAR)) if epoch_ids_beforeAR[i] not in epoch_ids_afterAR]
-    print(rejectedEpoch_ids)
-    Silent_epochs.pick_types(meg='mag').average().plot(scalings=dict(mag=1e15), ylim=dict(mag=[--300, 300]))
-    Silent_epochs.save(raw_file[:-4]+'_afterAR.fif')
+    # Define rejection criteria and perform artifact rejection
+    reject_criteria = dict(mag=4e-12)  # Adjust threshold as needed
+    epochs.drop_bad(reject=reject_criteria)
 
-    # save the rejected epochOmissionAR for future use
-    rejectedEpoch_indices = [np.where(epoch_ids_beforeAR == rejectedEpoch_ids[i])[0][0] for i in
-                             range(len(rejectedEpoch_ids))]
-    print(len(rejectedEpoch_indices))
-    print(rejectedEpoch_indices)
-    np.save(raw_file[:-4] + '_rejectedEpochs_AR', rejectedEpoch_indices)
+    epoch_ids_after_ar = epochs.selection
+    print(f"Number of epochs after artifact rejection: {len(epoch_ids_after_ar)}")
 
+    # Identify rejected epochs
+    rejected_epoch_ids = np.setdiff1d(epoch_ids_before_ar, epoch_ids_after_ar)
+    print(f"Rejected Epoch IDs: {rejected_epoch_ids}")
+
+    # Plot the averaged data after artifact rejection
+    epochs.pick_types(meg='mag').average().plot(
+        scalings=dict(mag=1e15), ylim=dict(mag=[-300, 300]),
+        title='Average After Artifact Rejection')
+
+    # Save the epochs after artifact rejection
+    base_filename = os.path.splitext(epochs_file)[0]
+    epochs.save(f"{base_filename}_afterAR.fif", overwrite=True)
+
+    # Save the indices of rejected epochs for future use
+    rejected_epoch_indices = [np.where(epoch_ids_before_ar == epoch_id)[0][0] for epoch_id in rejected_epoch_ids]
+    print(f"Indices of Rejected Epochs: {rejected_epoch_indices}")
+    np.save(f"{base_filename}_rejectedEpochs_AR.npy", rejected_epoch_indices)
+
+
+def main():
+    # Set data directory and file names
+    data_dir = r"MEG\SensoryProcessing_MEG-faraz\MEG_Data"
+    fname_raw = "17_2_tsss_mc_trans_silent.fif"
+    fname_epoched = "17_2_tsss_mc_trans_silent_epoched.fif"
+    fname_resampled = "17_2_tsss_mc_trans_silent_epoched_resampled_100hz.fif"
+
+    raw_file = join(data_dir, fname_raw)
+    epochs_file = join(data_dir, fname_epoched)
+    resampled_file = join(data_dir, fname_resampled)
+
+    # Flags to control processing steps
+    create_epochs_silent = True
+    resampling_silent = True
+    perform_artifacts_rejection = True
+
+    if create_epochs_silent:
+        create_silent_epochs(raw_file)
+
+    if resampling_silent:
+        sampling_rate = 100  # Desired sampling rate in Hz
+        resample_silent_epochs(epochs_file, sampling_rate)
+
+    if perform_artifacts_rejection:
+        artifacts_rejection(resampled_file)
+
+
+if __name__ == '__main__':
+    main()

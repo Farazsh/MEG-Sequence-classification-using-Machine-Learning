@@ -42,23 +42,23 @@ def create_model_plot(model_data, model_number, save_fig=False, save_path=None):
 
 def main():
     # Constants and configuration
-    DATA_DIR = r'MEG Plots\Multinomial l2\Silent'
-    MODEL_NUMBER = 81
-    SAVE_FIG = False
-    LABELS = ['bird_real', 'cry_real', 'bell_real', 'phone_real']
-    EPOCHS_FILENAME = '20210319_SilentDataLabelsEstimates_AR.npy'
+    data_dir = r'MEG Plots\Multinomial l2\Silent'
+    model_number = 81
+    save_fig = False
+    labels = ['bird_real', 'cry_real', 'bell_real', 'phone_real']
+    epoch_filename = '20210319_SilentDataLabelsEstimates_AR.npy'
 
     # Load the epochs data from the .npy file
-    epochs = load_epochs_data(DATA_DIR, EPOCHS_FILENAME)
+    epochs = load_epochs_data(data_dir, epoch_filename)
 
     # Extract and transpose the data for the specified model
-    best_model = get_model_data(epochs, MODEL_NUMBER)
+    best_model = get_model_data(epochs, model_number)
 
-    results_dir = os.path.join(DATA_DIR, str(MODEL_NUMBER))
-    fig_filename = os.path.join(results_dir, f'EpochVStimepoints_{MODEL_NUMBER}.png') if SAVE_FIG else None
+    results_dir = os.path.join(data_dir, str(model_number))
+    fig_filename = os.path.join(results_dir, f'EpochVStimepoints_{model_number}.png') if save_fig else None
 
     # Display or save plot
-    create_model_plot(best_model, MODEL_NUMBER, True, fig_filename)
+    create_model_plot(best_model, model_number, True, fig_filename)
 
 
 if __name__ == '__main__':
