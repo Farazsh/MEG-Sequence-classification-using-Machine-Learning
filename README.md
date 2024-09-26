@@ -2,8 +2,7 @@
 
 This repository contains the code used for reproducing the results from the study
 **"Magnetoencephalography (MEG) Sequence Classification using Machine Learning"**, which was my Research Project
-at TU Dresden, done in collaboration with TU Bern (Switzerland) in the working group of 
-[Athina Tzovara](https://neuro.inf.unibe.ch/menu/atzovara.html).
+at TU Dresden, done in collaboration with TU Bern (Switzerland).
 The project employs various machine learning techniques such as Logistic regression and SVM for the
 4-class classification of MEG sequences collected from participants exposed to auditory sequences and silent periods.
 

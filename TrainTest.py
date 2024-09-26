@@ -90,6 +90,7 @@ def train_and_evaluate(
         test_data_tp = test_data[:, :, tp]
 
         # Define the classification pipeline
+        # LogisticRegression classifier can be replaced with SVM or other algorithm of choice
         clf = make_pipeline(
             Vectorizer(),
             StandardScaler(),
