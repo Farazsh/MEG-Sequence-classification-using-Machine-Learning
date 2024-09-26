@@ -536,7 +536,7 @@ def plot_base_curve(y1, y2, y3):
     plt.legend(loc='upper right')
     plt.title(f"Classification Performance over time")
     df = 51
-    plt.savefig(path.join(r"C:\Users\FARAZ\Desktop\MEG Plots", str("%02d" % df)))
+    plt.savefig(path.join(r"\MEG Plots", str("%02d" % df)))
     plt.close("all")
 
 
@@ -562,7 +562,7 @@ def plot_smoothed(df, y):
     # plt.legend(bbox_to_anchor=(1.0, 1.0),bbox_transform=plt.gcf().transFigure)
     plt.legend(loc='upper right')
     plt.title(f"Classification Performance over time")
-    plt.savefig(path.join(r"C:\Users\FARAZ\Desktop\MEG Plots", str("%02d" % df)))
+    plt.savefig(path.join(r"\MEG Plots", str("%02d" % df)))
     plt.close("all")
 
 
@@ -597,7 +597,7 @@ def plot_smooth_curve(df, y1, y2, y3):
     # plt.legend(bbox_to_anchor=(1.0, 1.0),bbox_transform=plt.gcf().transFigure)
     plt.legend(loc='upper right')
     plt.title(f"Classification Performance over time")
-    plt.savefig(path.join(r"C:\Users\FARAZ\Desktop\MEG Plots", str("%02d" % df)))
+    plt.savefig(path.join(r"\MEG Plots", str("%02d" % df)))
     plt.close("all")
 
 
@@ -624,6 +624,6 @@ def plot_smoothed_2curves_inter(df, y1, y2, y3):
     # plt.legend(bbox_to_anchor=(1.0, 1.0),bbox_transform=plt.gcf().transFigure)
     plt.legend(loc='upper right')
     plt.title(f"Classification Performance over time")
-    plt.savefig(path.join(r"C:\Users\FARAZ\Desktop\MEG Plots", f"conv"+str("%02d" % df)))
+    plt.savefig(path.join(r"\MEG Plots", f"conv"+str("%02d" % df)))
     # plt.show()
     plt.close("all")

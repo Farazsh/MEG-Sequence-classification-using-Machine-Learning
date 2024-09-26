@@ -1,100 +1,188 @@
-import mne
-from mne.decoding import Vectorizer
-import numpy as np
-from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import GridSearchCV, cross_val_score, train_test_split, RepeatedKFold
-from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import make_pipeline
-from collections import Counter
-from sklearn.metrics import accuracy_score
-import random
-import warnings
-import matplotlib.pyplot as plt
-from os.path import join
+import os
 import pickle
-random.seed(50)
-plt.switch_backend("TkAgg")
+import warnings
+from collections import Counter
+
+import mne
+import numpy as np
+from mne.decoding import Vectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import RepeatedKFold, cross_val_score, train_test_split
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
 warnings.filterwarnings('ignore')
 mne.set_log_level('WARNING')
 
 
-# MEG datafile directory
-data_dir = r"C:\Users\FARAZ\Documents\Git Repositories\ML on MEG\check\SensoryProcessing_MEG-faraz\MEG_Data"
+def load_data(data_dir, fname_omission_ar, fname_silent_ar):
+    """
+    Load MEG epochs data from specified files.
 
-fnameOmissionAR = r"17_2_tsss_mc_trans_mag_nobase-epochs_afterICA-faraz_resampled_AR.fif"
-fnameSilentAR = r"17_2_tsss_mc_trans_silent_resampled_100hz_500ms_afterAR.fif"
+    Parameters:
+    data_dir (str): Directory where data files are located.
+    fname_omission_ar (str): Filename for omission AR epochs.
+    fname_silent_ar (str): Filename for silent AR epochs.
 
-datafileOmissionAR = join(data_dir, fnameOmissionAR)
-datafileSilentAR = join(data_dir, fnameSilentAR)
-
-epochOmissionAR = mne.read_epochs(datafileOmissionAR)
-epochSilentAR = mne.read_epochs(datafileSilentAR)
-
-# Results directory
-results_dir = r"C:\Users\FARAZ\Desktop\MEG Plots\Results"
-results_name = r"MEGAnalysisResult"
-
-# Best Parameter directory
-bestParams_dir = r"C:\Users\FARAZ\Desktop\MEG Plots\L2 reg\Best Params"
-bestParams_name = r"BestParamsFile.txt"
-
-# Models directory
-saved_models = r"C:\Users\FARAZ\Desktop\MEG Plots\Model"
-clsfFile = join(saved_models, "2575_predLevel.pkl")
-bestParams_file = join(bestParams_dir, bestParams_name)
-result_file = join(results_dir, results_name)
-
-epoch_real = epochOmissionAR['bird_real_10', 'phone_real_10', 'bell_real_10', 'cry_real_10']  # only real sounds of interest
-
-Train_Test = False
-
-if Train_Test:
-    # Seperate data and label
-    data = epoch_real.get_data()
-    label = epoch_real.events[:, -1]
-
-    nFolds = 5
-
-    trainData, testData, trainLabel, testLabel = train_test_split(data, label, test_size=0.25, random_state=50, stratify=label)
-    print(f"Entire Data: {Counter(label)}")
-    print(f"Train Data: {Counter(trainLabel)}")
-    print(f"Test Data: {Counter(testLabel)}")
+    Returns:
+    tuple: epoch_omission_ar, epoch_silent_ar
+    """
+    datafile_omission_ar = os.path.join(data_dir, fname_omission_ar)
+    datafile_silent_ar = os.path.join(data_dir, fname_silent_ar)
+    epoch_omission_ar = mne.read_epochs(datafile_omission_ar)
+    epoch_silent_ar = mne.read_epochs(datafile_silent_ar)
+    return epoch_omission_ar, epoch_silent_ar
 
 
-    repeats = nFolds
-    rkf = RepeatedKFold(n_splits=nFolds, n_repeats=repeats, random_state=50)
+def split_data(epochs, test_size=0.25, random_state=50):
+    """
+    Split the epochs data into training and testing sets.
 
-    tlim = 180
-    Classifiers_Timepoints = []
-    CV_score = np.zeros((repeats * nFolds, tlim))
-    train_Score = np.zeros((tlim))
-    test_Score = np.zeros((tlim))
-    Classifier_list = []
-    for tp in np.arange(tlim):
-        d2t_cv = trainData[:, :, tp]  # data to test
-        d2t_test = testData[:, :, tp]  # data to test - real
+    Parameters:
+    epochs (mne.Epochs): Epochs data to split.
+    test_size (float): Proportion of data to include in the test split.
+    random_state (int): Seed used by the random number generator.
 
-        clf = make_pipeline(Vectorizer(), StandardScaler(),
-                            LogisticRegression(penalty='l2', multi_class='multinomial'))
-        # get CV score:
-        CV_score[:, tp] = cross_val_score(clf, d2t_cv, trainLabel, cv=rkf)
-
-        # fit the model using all CV data:
-        clf.fit(d2t_cv, trainLabel)
-        Classifier_list.append(clf)
-
-        # generalize performance on train data:
-        estimated_trainLabel = clf.predict(d2t_cv)
-        train_Score[tp] = accuracy_score(trainLabel, estimated_trainLabel, normalize=True)
-
-        # generalize performance on test data:
-        estimated_testLabel = clf.predict(d2t_test)
-        test_Score[tp] = accuracy_score(testLabel, estimated_testLabel, normalize=True)
+    Returns:
+    tuple: train_data, test_data, train_labels, test_labels
+    """
+    data = epochs.get_data()
+    labels = epochs.events[:, -1]
+    train_data, test_data, train_labels, test_labels = train_test_split(
+        data, labels, test_size=test_size, random_state=random_state, stratify=labels
+    )
+    return train_data, test_data, train_labels, test_labels
 
 
-    results = [train_Score, test_Score, CV_score]
+def train_and_evaluate(
+    train_data, train_labels, test_data, test_labels,
+    n_folds=5, n_repeats=5, n_time_points=180, random_state=50
+):
+    """
+    Train classifiers for each time point and evaluate their performance.
+
+    Parameters:
+    train_data (numpy.ndarray): Training data of shape (n_samples, n_features, n_time_points).
+    train_labels (numpy.ndarray): Training labels.
+    test_data (numpy.ndarray): Testing data of shape (n_samples, n_features, n_time_points).
+    test_labels (numpy.ndarray): Testing labels.
+    n_folds (int): Number of folds for cross-validation.
+    n_repeats (int): Number of repeats for cross-validation.
+    n_time_points (int): Number of time points to evaluate.
+    random_state (int): Seed used by the random number generator.
+
+    Returns:
+    tuple: train_scores, test_scores, cv_scores, classifier_list
+    """
+    rkf = RepeatedKFold(
+        n_splits=n_folds, n_repeats=n_repeats, random_state=random_state
+    )
+
+    cv_scores = np.zeros((n_folds * n_repeats, n_time_points))
+    train_scores = np.zeros(n_time_points)
+    test_scores = np.zeros(n_time_points)
+    classifier_list = []
+
+    for tp in range(n_time_points):
+        # Extract data for the current time point
+        train_data_tp = train_data[:, :, tp]
+        test_data_tp = test_data[:, :, tp]
+
+        # Define the classification pipeline
+        clf = make_pipeline(
+            Vectorizer(),
+            StandardScaler(),
+            LogisticRegression(
+                penalty='l2',
+                multi_class='multinomial',
+                solver='lbfgs',
+                max_iter=1000
+            )
+        )
+
+        # Perform cross-validation and store the scores
+        cv_scores[:, tp] = cross_val_score(
+            clf, train_data_tp, train_labels, cv=rkf
+        )
+
+        # Fit the classifier on the entire training data
+        clf.fit(train_data_tp, train_labels)
+        classifier_list.append(clf)
+
+        # Predict on the training data and calculate training accuracy
+        predicted_train_labels = clf.predict(train_data_tp)
+        train_scores[tp] = accuracy_score(train_labels, predicted_train_labels)
+
+        # Predict on the testing data and calculate testing accuracy
+        predicted_test_labels = clf.predict(test_data_tp)
+        test_scores[tp] = accuracy_score(test_labels, predicted_test_labels)
+
+    return train_scores, test_scores, cv_scores, classifier_list
+
+
+def save_results(results, result_file):
+    """
+    Save the results to a NumPy file.
+
+    Parameters:
+    results (list): List of results to save.
+    result_file (str): Filename to save the results to.
+    """
     np.save(result_file, results)
 
-    with open(clsfFile, "wb") as f:
-        for model in Classifier_list:
-            pickle.dump(model, f)
+
+def save_classifiers(classifier_list, classifier_file):
+    """
+    Save the trained classifiers to a file.
+
+    Parameters:
+    classifier_list (list): List of trained classifiers.
+    classifier_file (str): Filename to save the classifiers to.
+    """
+    with open(classifier_file, "wb") as f:
+        pickle.dump(classifier_list, f)
+
+
+def main():
+    seed = 25
+    np.random.seed(seed)
+
+    # File and directory paths
+    data_dir = r"\Git Repositories\ML on MEG\check\SensoryProcessing_MEG-faraz\MEG_Data"
+    results_dir = r"\MEG Plots\Results"
+    saved_models_dir = r"\MEG Plots\Model"
+
+    fname_omission_ar = r"17_2_tsss_mc_trans_mag_nobase-epochs_afterICA-faraz_resampled_AR.fif"
+    fname_silent_ar = r"17_2_tsss_mc_trans_silent_resampled_100hz_500ms_afterAR.fif"
+
+    # Load epochs data
+    epoch_omission_ar, epoch_silent_ar = load_data(data_dir, fname_omission_ar, fname_silent_ar)
+
+    # Select real sounds of interest from the omission epochs
+    epoch_real = epoch_omission_ar['bird_real_10', 'phone_real_10', 'bell_real_10', 'cry_real_10']
+
+    # Split data into train and test sets
+    train_data, test_data, train_labels, test_labels = split_data(epoch_real)
+
+    # Display counts of labels in each set
+    print(f"Entire Data: {Counter(epoch_real.events[:, -1])}")
+    print(f"Train Data: {Counter(train_labels)}")
+    print(f"Test Data: {Counter(test_labels)}")
+
+    # Train and evaluate models
+    train_scores, test_scores, cv_scores, classifier_list = train_and_evaluate(
+        train_data, train_labels, test_data, test_labels)
+
+    # Save results and classifiers
+    results_name = "MEGAnalysisResult.npy"
+    classifier_filename = os.path.join(saved_models_dir, "2575_predLevel.pkl")
+    result_file = os.path.join(results_dir, results_name)
+
+    results = [train_scores, test_scores, cv_scores]
+    save_results(results, result_file)
+    save_classifiers(classifier_list, classifier_filename)
+
+
+if __name__ == "__main__":
+    main()

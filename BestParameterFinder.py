@@ -1,95 +1,229 @@
 import mne
-from mne import find_events
-from mne.decoding import Vectorizer, SlidingEstimator, cross_val_multiscore, GeneralizingEstimator
+from mne.decoding import Vectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import GridSearchCV, cross_val_score, train_test_split, StratifiedKFold, RepeatedKFold
+from sklearn.model_selection import GridSearchCV, train_test_split, RepeatedKFold
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import make_pipeline
 from collections import Counter
+from os.path import join
 import random
 import warnings
 
 warnings.filterwarnings('ignore')
-import import_ipynb
-import matplotlib
-import matplotlib.pyplot as plt
-import pickle
 
-random.seed(50)
-from os.path import join
 
-plt.switch_backend("TkAgg")
-mne.set_log_level('WARNING')
+class DataLoader:
+    """
+    A class to load MEG data from a .fif file and preprocess it.
 
-# MEG datafile directory
-data_dir = r"C:\Users\FARAZ\Documents\Git Repositories\ML on MEG\check\SensoryProcessing_MEG-faraz\MEG_Data"
-fname = r"17_2_tsss_mc_trans_mag_nobase-epochs_afterICA-faraz_resampled_AR.fif"
-data_file = join(data_dir, fname)
+    Attributes:
+        data_dir (str): The directory containing the data file.
+        fname (str): The name of the data file.
+        data_file (str): The full path to the data file.
+        epochs (mne.Epochs): The loaded MEG epochs.
+        data (np.ndarray): The data array extracted from epochs.
+        labels (np.ndarray): The labels corresponding to the data.
+    """
 
-# Results directory
-results_dir = r"C:\Users\FARAZ\Desktop\MEG Plots\Results"
-results_name = r"MEGAnalysisResult"
+    def __init__(self, data_dir, fname):
+        """
+        Initialize the DataLoader with the data directory and file name.
 
-# Best Parameter directory
-bestParams_dir = r"C:\Users\FARAZ\Desktop\MEG Plots\Parameter"
-bestParams_name = r"BestParamsFile.txt"
+        Parameters:
+            data_dir (str): The directory containing the data file.
+            fname (str): The name of the data file.
+        """
+        self.data_dir = data_dir
+        self.fname = fname
+        self.data_file = join(self.data_dir, self.fname)
+        self.epochs = None
+        self.data = None
+        self.labels = None
 
-# Models directory
-saved_models = r"C:\Users\FARAZ\Desktop\MEG Plots\Model"
-clsfFile = join(saved_models, "2575_predLevel.pkl")
-bestParams_file = join(bestParams_dir, bestParams_name)
-result_file = join(results_dir, results_name)
+    def load_data(self):
+        """
+        Load MEG epochs data from the file and select specific events.
 
-random.seed(50)
-tlim = 180
-epoch = mne.read_epochs(data_file)  # read epochOmissionAR
+        Returns:
+            data (np.ndarray): The data array extracted from epochs.
+            labels (np.ndarray): The labels corresponding to the data.
+        """
+        # Read epochs from file
+        self.epochs = mne.read_epochs(self.data_file)
 
-epoch_real = epoch['cry_real_10', 'bird_real_10', 'phone_real_10', 'bell_real_10']  # only real sounds of interest
+        # Select specific events (real sounds of interest)
+        self.epochs = self.epochs['cry_real_10', 'bird_real_10', 'phone_real_10', 'bell_real_10']
 
-# Seperate data and label
-data = epoch_real.get_data()
-label = epoch_real.events[:, -1]
+        # Get data and labels
+        self.data = self.epochs.get_data()
+        self.labels = self.epochs.events[:, -1]
 
-# le=LabelEncoder()
-# labels_real_binarized=le.fit_transform(label)
-nFolds = 5
+        return self.data, self.labels
 
-trainData, testData, trainLabel, testLabel = train_test_split(data, label, test_size=0.25, random_state=50,
-                                                              stratify=label)
-print(f"Entire Data: {Counter(label)}")
-print(f"Train Data: {Counter(trainLabel)}")
-print(f"Test Data: {Counter(testLabel)}")
 
-repeats = nFolds
-rkf = RepeatedKFold(n_splits=nFolds, n_repeats=repeats, random_state=50)
+class ModelTrainer:
+    """
+    A class to train a machine learning model using GridSearchCV.
 
-# 2. make optimization pipeline:
-parameters = {'penalty': ['l1', 'l2']}
-LRparam_grid = {
-    'C': [0.001, 0.01, 0.1, 1, 10, 100, 1000],
-    'penalty': ['l1', 'l2'],
-    'max_iter': list(range(100, 800, 100)),
-    'solver': ['newton-cg', 'lbfgs', 'liblinear', 'sag', 'saga']}
-clf_opt = make_pipeline(Vectorizer(), StandardScaler(),
-                        GridSearchCV(LogisticRegression(n_jobs=-1), LRparam_grid, cv=rkf))
+    Attributes:
+        n_folds (int): The number of folds for cross-validation.
+        random_state (int): The random state for reproducibility.
+        pipeline (sklearn.pipeline.Pipeline): The machine learning pipeline.
+        best_params (dict): The best parameters found by GridSearchCV.
+    """
 
-# 3. Use CV data to fit and optimize our classifier:
-clf_opt.fit(trainData, trainLabel)
+    def __init__(self, n_folds=5, random_state=50):
+        """
+        Initialize the ModelTrainer with the number of folds and random state.
 
-# 4. retrieve optimal parameters:
-tmp = clf_opt.steps[-1][1]
-best_penalty = tmp.best_params_['penalty']
-c_value = tmp.best_params_['C']
-solver = tmp.best_params_['solver']
-max_iter = tmp.best_params_['max_iter']
+        Parameters:
+            n_folds (int): The number of folds for cross-validation.
+            random_state (int): The random state for reproducibility.
+        """
+        self.n_folds = n_folds
+        self.random_state = random_state
+        self.pipeline = None
+        self.best_params = None
 
-# 5. Use the optimized classifier on the test dataset (w/o time):
-score = clf_opt.score(testData, testLabel)
+    def train(self, X_train, y_train):
+        """
+        Train the model with GridSearchCV and find the best parameters.
 
-print(score)
-print(f'Best Penalty: {best_penalty}\nC : {c_value}\nSolver: {solver}\nMax Iter:{max_iter}')
+        Parameters:
+            X_train (np.ndarray): The training data.
+            y_train (np.ndarray): The training labels.
 
-# save the best params for later use
-file = open(bestParams_file, "w")
-file.writelines('best penalty: ' + best_penalty)
-file.close()
+        Returns:
+            pipeline (sklearn.pipeline.Pipeline): The trained machine learning pipeline.
+        """
+        repeats = self.n_folds
+        rkf = RepeatedKFold(n_splits=self.n_folds, n_repeats=repeats, random_state=self.random_state)
+
+        # Define parameter grid for Logistic Regression
+        LRparam_grid = {
+            'C': [0.001, 0.01, 0.1, 1, 10, 100, 1000],
+            'penalty': ['l1', 'l2'],
+            'max_iter': list(range(100, 800, 100)),
+            'solver': ['newton-cg', 'lbfgs', 'liblinear', 'sag', 'saga']
+        }
+
+        # Set up the pipeline with vectorization, scaling, and grid search
+        clf = LogisticRegression(n_jobs=-1)
+        grid_search = GridSearchCV(clf, LRparam_grid, cv=rkf)
+        self.pipeline = make_pipeline(Vectorizer(), StandardScaler(), grid_search)
+
+        # Fit the pipeline on the training data
+        self.pipeline.fit(X_train, y_train)
+
+        # Retrieve best parameters from GridSearchCV
+        self.best_params = self.pipeline.named_steps['gridsearchcv'].best_params_
+
+        return self.pipeline
+
+
+class ModelEvaluator:
+    """
+    A class to evaluate the trained model on test data.
+
+    Attributes:
+        model (sklearn.pipeline.Pipeline): The trained machine learning pipeline.
+    """
+
+    def __init__(self, model):
+        """
+        Initialize the ModelEvaluator with the trained model.
+
+        Parameters:
+            model (sklearn.pipeline.Pipeline): The trained machine learning pipeline.
+        """
+        self.model = model
+
+    def evaluate(self, X_test, y_test):
+        """
+        Evaluate the model on the test data.
+
+        Parameters:
+            X_test (np.ndarray): The test data.
+            y_test (np.ndarray): The test labels.
+
+        Returns:
+            score (float): The accuracy score of the model on the test data.
+        """
+        score = self.model.score(X_test, y_test)
+        return score
+
+
+class ParameterSaver:
+    """
+    A class to save the best parameters to a file.
+
+    Attributes:
+        params (dict): The best parameters.
+        file_path (str): The path to the file where parameters will be saved.
+    """
+
+    def __init__(self, params, file_path):
+        """
+        Initialize the ParameterSaver with parameters and file path.
+
+        Parameters:
+            params (dict): The best parameters.
+            file_path (str): The path to the file where parameters will be saved.
+        """
+        self.params = params
+        self.file_path = file_path
+
+    def save(self):
+        """
+        Save the best parameters to the file.
+        """
+        with open(self.file_path, 'w') as file:
+            for key, value in self.params.items():
+                file.write(f'{key}: {value}\n')
+
+
+def main():
+    """
+    The main function to execute data loading, model training, evaluation, and saving the best parameters.
+    """
+    random.seed(50)
+
+    # Define file paths
+    data_dir = r"\ML on MEG\SensoryProcessing_MEG-faraz\MEG_Data"
+    fname = r"17_2_tsss_mc_trans_mag_nobase-epochs_afterICA-faraz_resampled_AR.fif"
+    best_params_dir = r"\MEG Plots\Parameter"
+    best_params_name = r"BestParamsFile.txt"
+    best_params_file = join(best_params_dir, best_params_name)
+
+    # Load data
+    data_loader = DataLoader(data_dir, fname)
+    data, labels = data_loader.load_data()
+
+    # Split data into training and testing sets
+    X_train, X_test, y_train, y_test = train_test_split(
+        data, labels, test_size=0.25, random_state=50, stratify=labels)
+
+    # Display data distribution
+    print(f"Entire Data: {Counter(labels)}")
+    print(f"Train Data: {Counter(y_train)}")
+    print(f"Test Data: {Counter(y_test)}")
+
+    # Train the model
+    model_trainer = ModelTrainer(n_folds=5, random_state=50)
+    model = model_trainer.train(X_train, y_train)
+
+    # Evaluate the model
+    evaluator = ModelEvaluator(model)
+    score = evaluator.evaluate(X_test, y_test)
+    print(f"Test Score: {score}")
+    print("Best Parameters:")
+    for key, value in model_trainer.best_params.items():
+        print(f"{key}: {value}")
+
+    # Save best parameters to file
+    param_saver = ParameterSaver({'best penalty': model_trainer.best_params['penalty']}, best_params_file)
+    param_saver.save()
+
+
+if __name__ == '__main__':
+    main()
